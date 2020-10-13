@@ -1,5 +1,4 @@
 ;;; TODO:
-;;; - Button controls for player paddle
 ;;; - Paddle/ball collision detection
 ;;; - AI for CPU paddle
 ;;; - Scoring
@@ -7,6 +6,18 @@
 ;;; - Press START to pause/unpause
 
 INCLUDE "src/hardware.inc"
+
+P1F_DOWN   EQU P1F_3
+P1F_UP     EQU P1F_2
+
+;;; Initial ball velocity:
+INIT_BALL_X_VEL EQU 2
+INIT_BALL_Y_VEL EQU 3
+;;; How many pixels the player's paddle can move per frame:
+PADDLE1_SPEED EQU 3
+;;; Min/max Y position for paddle center.
+PADDLE_Y_MIN EQU 32
+PADDLE_Y_MAX EQU 152
 
 SECTION "Main", ROM0[$0150]
 Main::
@@ -81,9 +92,9 @@ Main::
     ldh [rAUDENA], a
 
     ;; Init game state:
-    ld a, 2
+    ld a, INIT_BALL_X_VEL
     ld [BallXVel], a
-    ld a, 1
+    ld a, INIT_BALL_Y_VEL
     ld [BallYVel], a
 
     ;; Turn on the LCD.
@@ -102,7 +113,44 @@ Run:
     jr Run
 
 OnVBlankInterrupt::
-    ;; Update Y position/velocity.
+UpdateP1YPos:
+    ;; Store D-pad state in `d`.
+    ld a, P1F_GET_DPAD
+    ld [rP1], a
+    REPT 4  ; It takes a few cycles to get an accurate reading.
+    ld a, [rP1]
+    ENDR
+    cpl
+    ld d, a
+    ;; If holding UP button, move P1 paddle up.
+    and P1F_UP
+    jr z, .dpadElif
+    ld a, [P1BotYPos]
+    sub PADDLE1_SPEED
+    cp PADDLE_Y_MIN
+    jr nc, .upEnd
+    ld a, PADDLE_Y_MIN
+    .upEnd
+    ld [P1BotYPos], a
+    sub 8
+    ld [P1TopYPos], a
+    jr .dpadEnd
+    ;; Else if holding DOWN button, move P1 paddle down.
+    .dpadElif
+    ld a, d
+    and P1F_DOWN
+    jr z, .dpadEnd
+    ld a, [P1BotYPos]
+    add PADDLE1_SPEED
+    cp PADDLE_Y_MAX
+    jr c, .downEnd
+    ld a, PADDLE_Y_MAX
+    .downEnd
+    ld [P1BotYPos], a
+    sub 8
+    ld [P1TopYPos], a
+    .dpadEnd
+UpdateBallYPos:
     ;; [hl] : current Y position
     ;; b : old Y velocity
     ;; c : new Y position
@@ -134,8 +182,7 @@ OnVBlankInterrupt::
     .yElse
     ld [hl], a
     .yEnd
-
-    ;; Update X position/velocity.
+UpdateBallXPos:
     ;; [hl] : current X position
     ;; b : old X velocity
     ;; c : new X position
@@ -169,7 +216,6 @@ OnVBlankInterrupt::
     .xElse
     ld [hl], a
     .xEnd
-
     reti
 
 ;;; Copies bytes.
@@ -187,20 +233,3 @@ MemCopy:
     inc de
     dec bc
     jr .loop
-
-SECTION "VRAM", VRAM[$8000]
-VramObjTiles:
-    DS $800
-    .end
-VramSharedTiles:
-    DS $800
-    .end
-VramBgTiles:
-    DS $800
-    .end
-VramBgMap:
-    DS $400
-    .end
-VramWindowMap:
-    DS $400
-    .end

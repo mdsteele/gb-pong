@@ -6,6 +6,20 @@ BallYVel::
     DB
 
 
+SECTION "VRAM", VRAM[$8000]
+
+VramObjTiles::
+    DS $800
+VramSharedTiles::
+    DS $800
+VramBgTiles::
+    DS $800
+VramBgMap::
+    DS $400
+VramWindowMap::
+    DS $400
+
+
 SECTION "OAM", OAM[$fe00]
 
 BallYPos::
