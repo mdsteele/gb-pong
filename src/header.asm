@@ -1,3 +1,5 @@
+INCLUDE "src/hardware.inc"
+
 SECTION "Header-Init", ROM0[$0100]
     ;; Execution starts here.
     nop
@@ -16,19 +18,19 @@ SECTION "Header-Metadata", ROM0[$013f]
     ;; $013F-$0142: Manufacturer code
     DS 4  ; blank
     ;; $0143: Game Boy Color flag
-    DB $00  ; DMG (i.e. original Game Boy)
+    DB CART_COMPATIBLE_DMG
     ;; $0144-$0145: New licensee code
     DW $0000  ; none
     ;; $0146: Super Game Boy indicator
-    DB $00  ; Game Boy (not SGB)
+    DB CART_INDICATOR_GB
     ;; $0147: Cartridge type
-    DB $00  ; ROM Only
+    DB CART_ROM
     ;; $0148: ROM size
-    DB $00  ; 32kB
+    DB CART_ROM_32KB
     ;; $0149: RAM size
-    DB $00  ; none
+    DB CART_SRAM_NONE
     ;; $014A: Destination code
-    DB $01  ; non-Japan
+    DB CART_DEST_NON_JAPANESE
     ;; $014B: Old licensee code
     DB $33  ; Use new licensee code
     ;; $014C: Mask ROM version

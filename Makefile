@@ -36,7 +36,7 @@ endef
 $(OBJDIR)/bgdata.o: $(SRCDIR)/bgdata.asm
 	$(compile-asm)
 
-$(OBJDIR)/header.o: $(SRCDIR)/header.asm
+$(OBJDIR)/header.o: $(SRCDIR)/header.asm $(SRCDIR)/hardware.inc
 	$(compile-asm)
 
 $(OBJDIR)/interrupt.o: $(SRCDIR)/interrupt.asm $(SRCDIR)/hardware.inc
