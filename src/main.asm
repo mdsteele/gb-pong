@@ -1,3 +1,11 @@
+;;; TODO:
+;;; - Button controls for player paddle
+;;; - Paddle/ball collision detection
+;;; - AI for CPU paddle
+;;; - Scoring
+;;; - Sound effects
+;;; - Press START to pause/unpause
+
 INCLUDE "src/hardware.inc"
 
 SECTION "Main", ROM0[$0150]
@@ -13,7 +21,7 @@ Main::
     ld a, LCDCF_OFF
     ld [rLCDC], a
 
-    ;; Write a BG tile into VRAM.
+    ;; Write BG tiles into VRAM.
     ld hl, VramBgTiles                  ; dest
     ld de, RomBgTiles                   ; src
     ld bc, RomBgTiles.end - RomBgTiles  ; count
@@ -25,16 +33,61 @@ Main::
     ld bc, RomBgMap.end - RomBgMap  ; count
     call MemCopy
 
+    ;; Write obj tiles into VRAM.
+    ld hl, VramObjTiles                   ; dest
+    ld de, RomObjTiles                    ; src
+    ld bc, RomObjTiles.end - RomObjTiles  ; count
+    call MemCopy
+
+    ;; Add ball obj to OAM:
+    ld a, 20
+    ld [BallXPos], a
+    ld a, 80
+    ld [BallYPos], a
+    xor a
+    ld [BallObj], a
+
+    ;; Add paddle objs to OAM:
+    ld a, 12
+    ld [P1TopXPos], a
+    ld [P1BotXPos], a
+    ld a, 156
+    ld [P2TopXPos], a
+    ld [P2BotXPos], a
+    ld a, 88
+    ld [P1TopYPos], a
+    ld [P2TopYPos], a
+    ld a, 96
+    ld [P1BotYPos], a
+    ld [P2BotYPos], a
+    ld a, 1
+    ld [P1TopObj], a
+    ld [P2TopObj], a
+    ld a, 2
+    ld [P1BotObj], a
+    ld [P2BotObj], a
+
     ;; Initialize background palette.
     ld a, %11100100
     ldh [rBGP], a
+
+    ;; Initialize obj palettes.
+    ld a, %11100100
+    ldh [rOBP0], a
+    ldh [rOBP1], a
 
     ;; Disable sound.
     ld a, AUDENA_OFF
     ldh [rAUDENA], a
 
-    ;;  Turn screen on and display background.
-    ld a, LCDCF_ON | LCDCF_BGON | LCDCF_WIN9C00
+    ;; Init game state:
+    ld a, 2
+    ld [BallXVel], a
+    ld a, 1
+    ld [BallYVel], a
+
+    ;; Turn on the LCD.
+    ld a, LCDCF_ON | LCDCF_BGON | LCDCF_OBJON | LCDCF_WIN9C00
     ldh [rLCDC], a
 
     ;; Enable VBlank interrupt.
@@ -49,21 +102,74 @@ Run:
     jr Run
 
 OnVBlankInterrupt::
-    ;; a = (*FadeCounter >> 2) & 0x7
-    ldh a, [FadeCounter]
-    inc a
-    ldh [FadeCounter], a
-    srl a
-    srl a
-    and a, $07
-    ;; a = FadeTable[a]
-    ld hl, FadeTable
-    or a, l
-    ld l, a
+    ;; Update Y position/velocity.
+    ;; [hl] : current Y position
+    ;; b : old Y velocity
+    ;; c : new Y position
+    ld hl, BallYPos
+    ld a, [BallYVel]
+    ld b, a
     ld a, [hl]
-    ;; Set last background palette color to `a`.
-    or a, %11100100
-    ldh [rBGP], a
+    add b
+    ld c, a
+    ;; if (newY < 24)
+    cp 24
+    jr nc, .yElif
+    ld [hl], 24
+    xor a
+    sub b
+    ld [BallYVel], a
+    jr .yEnd
+    ;; elif (newY > 152)
+    .yElif
+    ld a, c
+    cp 152
+    jr c, .yElse
+    ld [hl], 152
+    xor a
+    sub b
+    ld [BallYVel], a
+    jr .yEnd
+    ;; else
+    .yElse
+    ld [hl], a
+    .yEnd
+
+    ;; Update X position/velocity.
+    ;; [hl] : current X position
+    ;; b : old X velocity
+    ;; c : new X position
+    ld hl, BallXPos
+    ld a, [BallXVel]
+    ld b, a
+    ld a, [hl]
+    add b
+    ld c, a
+    ;; if (newX < 8)
+    cp 8
+    jr nc, .xElif
+    ld [hl], 8
+    ld a, b
+    cpl
+    add 1
+    ld [BallXVel], a
+    jr .xEnd
+    ;; elif (newX > 160)
+    .xElif
+    ld a, c
+    cp 160
+    jr c, .xElse
+    ld [hl], 160
+    ld a, b
+    cpl
+    add 1
+    ld [BallXVel], a
+    jr .xEnd
+    ;; else
+    .xElse
+    ld [hl], a
+    .xEnd
+
     reti
 
 ;;; Copies bytes.
@@ -82,16 +188,8 @@ MemCopy:
     dec bc
     jr .loop
 
-SECTION "Fade-Table", ROM0, ALIGN[3]
-FadeTable:
-    DB 0, 0, 1, 2, 3, 3, 2, 1
-
-SECTION "Fade-Counter", HRAM
-FadeCounter:
-    DB
-
 SECTION "VRAM", VRAM[$8000]
-VramSpriteTiles:
+VramObjTiles:
     DS $800
     .end
 VramSharedTiles:
