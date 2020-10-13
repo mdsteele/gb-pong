@@ -13,6 +13,18 @@ Main::
     ld a, LCDCF_OFF
     ld [rLCDC], a
 
+    ;; Write a BG tile into VRAM.
+    ld hl, VramBgTiles                  ; dest
+    ld de, RomBgTiles                   ; src
+    ld bc, RomBgTiles.end - RomBgTiles  ; count
+    call MemCopy
+
+    ;; Write BG map.
+    ld hl, VramBgMap                ; dest
+    ld de, RomBgMap                 ; src
+    ld bc, RomBgMap.end - RomBgMap  ; count
+    call MemCopy
+
     ;; Initialize background palette.
     ld a, %11100100
     ldh [rBGP], a
@@ -22,7 +34,7 @@ Main::
     ldh [rAUDENA], a
 
     ;;  Turn screen on and display background.
-    ld a, LCDCF_ON | LCDCF_BGON
+    ld a, LCDCF_ON | LCDCF_BGON | LCDCF_WIN9C00
     ldh [rLCDC], a
 
     ;; Enable VBlank interrupt.
@@ -54,6 +66,22 @@ OnVBlankInterrupt::
     ldh [rBGP], a
     reti
 
+;;; Copies bytes.
+;;; @param hl Destination start address.
+;;; @param de Source start address.
+;;; @param bc Num bytes to copy.
+;;; @return a Zero.
+MemCopy:
+    .loop
+    ld a, b
+    or c
+    ret z
+    ld a, [de]
+    ld [hl+], a
+    inc de
+    dec bc
+    jr .loop
+
 SECTION "Fade-Table", ROM0, ALIGN[3]
 FadeTable:
     DB 0, 0, 1, 2, 3, 3, 2, 1
@@ -61,3 +89,20 @@ FadeTable:
 SECTION "Fade-Counter", HRAM
 FadeCounter:
     DB
+
+SECTION "VRAM", VRAM[$8000]
+VramSpriteTiles:
+    DS $800
+    .end
+VramSharedTiles:
+    DS $800
+    .end
+VramBgTiles:
+    DS $800
+    .end
+VramBgMap:
+    DS $400
+    .end
+VramWindowMap:
+    DS $400
+    .end

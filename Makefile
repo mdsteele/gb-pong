@@ -33,6 +33,9 @@ define compile-asm
 	rgbasm -o $@ $<
 endef
 
+$(OBJDIR)/bgdata.o: $(SRCDIR)/bgdata.asm
+	$(compile-asm)
+
 $(OBJDIR)/header.o: $(SRCDIR)/header.asm
 	$(compile-asm)
 
