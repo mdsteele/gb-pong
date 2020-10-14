@@ -1,7 +1,6 @@
 ;;; TODO:
 ;;; - Paddle/ball collision detection
 ;;; - Scoring
-;;; - Sound effects
 ;;; - Press START to pause/unpause
 
 INCLUDE "src/hardware.inc"
@@ -87,9 +86,13 @@ Main::
     ldh [rOBP0], a
     ldh [rOBP1], a
 
-    ;; Disable sound.
-    ld a, AUDENA_OFF
+    ;; Enable sound.
+    ld a, AUDENA_ON
     ldh [rAUDENA], a
+    ld a, $11
+    ldh [rAUDTERM], a
+    ld a, $77
+    ldh [rAUDVOL], a
 
     ;; Init game state:
     ld a, INIT_BALL_X_VEL
@@ -204,6 +207,7 @@ UpdateBallYPos:
     xor a
     sub b
     ld [BallYVel], a
+    call PlayBounceSound
     jr .yEnd
     ;; elif (newY > 152)
     .yElif
@@ -214,6 +218,7 @@ UpdateBallYPos:
     xor a
     sub b
     ld [BallYVel], a
+    call PlayBounceSound
     jr .yEnd
     ;; else
     .yElse
@@ -237,6 +242,7 @@ UpdateBallXPos:
     cpl
     add 1
     ld [BallXVel], a
+    call PlayBounceSound
     jr .xEnd
     ;; elif (newX > 160)
     .xElif
@@ -248,6 +254,7 @@ UpdateBallXPos:
     cpl
     add 1
     ld [BallXVel], a
+    call PlayBounceSound
     jr .xEnd
     ;; else
     .xElse
@@ -259,7 +266,6 @@ UpdateBallXPos:
 ;;; @param hl Destination start address.
 ;;; @param de Source start address.
 ;;; @param bc Num bytes to copy.
-;;; @return a Zero.
 MemCopy:
     .loop
     ld a, b
@@ -270,3 +276,17 @@ MemCopy:
     inc de
     dec bc
     jr .loop
+
+;;; Plays a sound for when the ball bounces.
+PlayBounceSound:
+    ld a, %00101101
+    ldh [rAUD1SWEEP], a
+    ld a, %10010000
+    ldh [rAUD1LEN], a
+    ld a, %01000010
+    ldh [rAUD1ENV], a
+    ld a, %11100000
+    ldh [rAUD1LOW], a
+    ld a, %10000111
+    ldh [rAUD1HIGH], a
+    ret
