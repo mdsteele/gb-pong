@@ -1,6 +1,5 @@
 ;;; TODO:
 ;;; - Paddle/ball collision detection
-;;; - AI for CPU paddle
 ;;; - Scoring
 ;;; - Sound effects
 ;;; - Press START to pause/unpause
@@ -13,8 +12,9 @@ P1F_UP     EQU P1F_2
 ;;; Initial ball velocity:
 INIT_BALL_X_VEL EQU 2
 INIT_BALL_Y_VEL EQU 3
-;;; How many pixels the player's paddle can move per frame:
+;;; How many pixels each paddle can move per frame:
 PADDLE1_SPEED EQU 3
+PADDLE2_SPEED EQU 1
 ;;; Min/max Y position for paddle center.
 PADDLE_Y_MIN EQU 32
 PADDLE_Y_MAX EQU 152
@@ -150,6 +150,43 @@ UpdateP1YPos:
     sub 8
     ld [P1TopYPos], a
     .dpadEnd
+UpdateP2YPos:
+    ;; Store current ball center Y in `b`.
+    ld a, [BallYPos]
+    add 4
+    ld b, a
+    ;; Store current P2 paddle center Y in `d`.
+    ld a, [P2BotYPos]
+    ld d, a
+    ;; If ball is above, move P2 paddle up.
+    ld a, b
+    cp d
+    jr nc, .aiElif
+    ld a, [P2BotYPos]
+    sub PADDLE2_SPEED
+    cp PADDLE_Y_MIN
+    jr nc, .upEnd
+    ld a, PADDLE_Y_MIN
+    .upEnd
+    ld [P2BotYPos], a
+    sub 8
+    ld [P2TopYPos], a
+    jr .aiEnd
+    ;; Else if ball is below, move P2 paddle down.
+    .aiElif
+    ld a, d
+    cp b
+    jr nc, .aiEnd
+    ld a, [P2BotYPos]
+    add PADDLE2_SPEED
+    cp PADDLE_Y_MAX
+    jr c, .downEnd
+    ld a, PADDLE_Y_MAX
+    .downEnd
+    ld [P2BotYPos], a
+    sub 8
+    ld [P2TopYPos], a
+    .aiEnd
 UpdateBallYPos:
     ;; [hl] : current Y position
     ;; b : old Y velocity
