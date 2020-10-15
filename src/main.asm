@@ -1,5 +1,4 @@
 ;;; TODO:
-;;; - Paddle/ball collision detection
 ;;; - Scoring
 
 INCLUDE "src/hardware.inc"
@@ -8,13 +7,18 @@ INCLUDE "src/hardware.inc"
 
 ;;; Initial ball velocity:
 INIT_BALL_X_VEL EQU 2
-INIT_BALL_Y_VEL EQU 3
+INIT_BALL_Y_VEL EQU 0
 ;;; How many pixels each paddle can move per frame:
 PADDLE1_SPEED EQU 3
 PADDLE2_SPEED EQU 1
+;;; The X position for the center of each paddle:
+PADDLE1_MIDX EQU 16
+PADDLE2_MIDX EQU 160
 ;;; Min/max Y position for paddle center.
 PADDLE_Y_MIN EQU 32
 PADDLE_Y_MAX EQU 152
+;;; The initial Y position for paddle center.
+PADDLE_Y_INIT EQU 96
 
 ;;;=========================================================================;;;
 
@@ -43,16 +47,16 @@ Main::
     ld [BallObj], a
 
     ;; Add paddle objs:
-    ld a, 12
+    ld a, PADDLE1_MIDX - 4
     ld [P1TopXPos], a
     ld [P1BotXPos], a
-    ld a, 156
+    ld a, PADDLE2_MIDX - 4
     ld [P2TopXPos], a
     ld [P2BotXPos], a
-    ld a, 88
+    ld a, PADDLE_Y_INIT - 8
     ld [P1TopYPos], a
     ld [P2TopYPos], a
-    ld a, 96
+    ld a, PADDLE_Y_INIT
     ld [P1BotYPos], a
     ld [P2BotYPos], a
     ld a, 1
@@ -225,74 +229,119 @@ UpdateP2YPos:
     ld [P2TopYPos], a
     .aiEnd
 UpdateBallYPos:
-    ;; [hl] : current Y position
     ;; b : old Y velocity
-    ;; c : new Y position
-    ld hl, BallYPos
+    ;; c : new Y position, ignoring collisions
     ld a, [BallYVel]
     ld b, a
-    ld a, [hl]
+    ld a, [BallYPos]
     add b
     ld c, a
     ;; if (newY < 24)
     cp 24
     jr nc, .yElif
-    ld [hl], 24
+    ld a, 24
+    ld [BallYPos], a
     xor a
     sub b
     ld [BallYVel], a
-    call PlayBounceSound
+    call PlayWallBounceSound
     jr .yEnd
     ;; elif (newY > 152)
     .yElif
     ld a, c
     cp 152
     jr c, .yElse
-    ld [hl], 152
+    ld a, 152
+    ld [BallYPos], a
     xor a
     sub b
     ld [BallYVel], a
-    call PlayBounceSound
+    call PlayWallBounceSound
     jr .yEnd
     ;; else
     .yElse
-    ld [hl], a
+    ld [BallYPos], a
     .yEnd
 UpdateBallXPos:
-    ;; [hl] : current X position
     ;; b : old X velocity
-    ;; c : new X position
-    ld hl, BallXPos
+    ;; c : new X position, ignoring collisions
     ld a, [BallXVel]
     ld b, a
-    ld a, [hl]
+    ld a, [BallXPos]
     add b
     ld c, a
+    ;; Check which direction the ball is moving.
+    ld a, b
+    and %10000000
+    jr z, .movingRight
+    ;; When moving left, we can hit the P1 paddle.
+    .movingLeft
+    ld a, c
+    cp PADDLE1_MIDX
+    jr nc, .movingEnd
+    ld a, [P1TopYPos]
+    sub 7
+    ld e, a
+    ld a, [BallYPos]
+    sub e
+    jr c, .movingEnd
+    cp 30
+    jr nc, .movingEnd
+    srl a
+    srl a
+    sub 3
+    ld [BallYVel], a
+    ld a, INIT_BALL_X_VEL
+    ld [BallXVel], a
+    call PlayPaddleBounceSound
+    jr .movingEnd
+    ;; When moving right, we can hit the P2 paddle.
+    .movingRight
+    ld a, c
+    cp PADDLE2_MIDX - 8
+    jr c, .movingEnd
+    ld a, [P2TopYPos]
+    sub 7
+    ld e, a
+    ld a, [BallYPos]
+    sub e
+    jr c, .movingEnd
+    cp 30
+    jr nc, .movingEnd
+    srl a
+    srl a
+    sub 3
+    ld [BallYVel], a
+    ld a, -INIT_BALL_X_VEL
+    ld [BallXVel], a
+    call PlayPaddleBounceSound
+    .movingEnd
     ;; if (newX < 8)
+    ld a, c
     cp 8
     jr nc, .xElif
-    ld [hl], 8
-    ld a, b
-    cpl
-    add 1
+    ld a, 8
+    ld [BallXPos], a
+    xor a
+    sub b
     ld [BallXVel], a
-    call PlayBounceSound
+    call PlayWallBounceSound
     jr .xEnd
     ;; elif (newX > 160)
     .xElif
     ld a, c
     cp 160
     jr c, .xElse
-    ld [hl], 160
-    ld a, b
-    cpl
-    add 1
+    ld a, 160
+    ld [BallXPos], a
+    xor a
+    sub b
     ld [BallXVel], a
-    call PlayBounceSound
+    call PlayWallBounceSound
     jr .xEnd
     ;; else
     .xElse
-    ld [hl], a
+    ld [BallXPos], a
     .xEnd
     jp RunLoop
 
@@ -367,8 +416,22 @@ StoreButtonStateInB:
     ld [rP1], a
     ret
 
-;;; Plays a sound for when the ball bounces.
-PlayBounceSound:
+;;; Plays a sound for when the ball bounces off a paddle.
+PlayPaddleBounceSound:
+    ld a, %00101101
+    ldh [rAUD1SWEEP], a
+    ld a, %10010000
+    ldh [rAUD1LEN], a
+    ld a, %01000010
+    ldh [rAUD1ENV], a
+    ld a, %11000000
+    ldh [rAUD1LOW], a
+    ld a, %10000111
+    ldh [rAUD1HIGH], a
+    ret
+
+;;; Plays a sound for when the ball bounces off a wall.
+PlayWallBounceSound:
     ld a, %00101101
     ldh [rAUD1SWEEP], a
     ld a, %10010000
