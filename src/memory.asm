@@ -7,6 +7,10 @@ BallXVel::
     DB
 BallYVel::
     DB
+IsPaused::
+    DB
+HoldingStartButton::
+    DB
 
 ;;;=========================================================================;;;
 

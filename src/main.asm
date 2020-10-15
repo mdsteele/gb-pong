@@ -1,12 +1,8 @@
 ;;; TODO:
 ;;; - Paddle/ball collision detection
 ;;; - Scoring
-;;; - Press START to pause/unpause
 
 INCLUDE "src/hardware.inc"
-
-P1F_DOWN   EQU P1F_3
-P1F_UP     EQU P1F_2
 
 ;;;=========================================================================;;;
 
@@ -71,6 +67,9 @@ Main::
     ld [BallXVel], a
     ld a, INIT_BALL_Y_VEL
     ld [BallYVel], a
+    xor a
+    ld [IsPaused], a
+    ld [HoldingStartButton], a
 
     ;; Turn off the LCD.
     .waitForVBlank
@@ -126,17 +125,42 @@ Main::
 
 RunLoop:
     call AwaitRedraw
-UpdateP1YPos:
-    ;; Store D-pad state in `d`.
-    ld a, P1F_GET_DPAD
-    ld [rP1], a
-    REPT 4  ; It takes a few cycles to get an accurate reading.
-    ld a, [rP1]
-    ENDR
+    call StoreButtonStateInB
+PauseOrUnpause:
+    ;; When press start, pause/unpause.
+    ld a, b
+    and PADF_START
+    jr z, .noToggle
+    ld a, [HoldingStartButton]
+    or a
+    jr nz, .toggleEnd
+    ld a, 1
+    ld [HoldingStartButton], a
+    ld a, [IsPaused]
     cpl
-    ld d, a
+    ld [IsPaused], a
+    or a
+    jr z, .unpause
+    .pause
+    ld a, %00011011
+    ldh [rBGP], a
+    jr .toggleEnd
+    .unpause
+    ld a, %11100100
+    ldh [rBGP], a
+    jr .toggleEnd
+    .noToggle
+    xor a
+    ld [HoldingStartButton], a
+    .toggleEnd
+CheckIfPaused:
+    ld a, [IsPaused]
+    or a
+    jr nz, RunLoop
+UpdateP1YPos:
     ;; If holding UP button, move P1 paddle up.
-    and P1F_UP
+    ld a, b
+    and PADF_UP
     jr z, .dpadElif
     ld a, [P1BotYPos]
     sub PADDLE1_SPEED
@@ -150,8 +174,8 @@ UpdateP1YPos:
     jr .dpadEnd
     ;; Else if holding DOWN button, move P1 paddle down.
     .dpadElif
-    ld a, d
-    and P1F_DOWN
+    ld a, b
+    and PADF_DOWN
     jr z, .dpadEnd
     ld a, [P1BotYPos]
     add PADDLE1_SPEED
@@ -316,6 +340,31 @@ AwaitRedraw:
     jr z, .loop
     call PerformOamDma
     ei    ; "Unlock"
+    ret
+
+;;; Reads and returns state of D-pad/buttons.
+;;; @return b The 8-bit button state.
+StoreButtonStateInB:
+    ld a, P1F_GET_DPAD
+    ld [rP1], a
+    REPT 2  ; It takes a couple cycles to get an accurate reading.
+    ld a, [rP1]
+    ENDR
+    cpl
+    and $0f
+    swap a
+    ld b, a
+    ld a, P1F_GET_BTN
+    ld [rP1], a
+    REPT 6  ; It takes several cycles to get an accurate reading.
+    ld a, [rP1]
+    ENDR
+    cpl
+    and $0f
+    or b
+    ld b, a
+    ld a, P1F_GET_NONE
+    ld [rP1], a
     ret
 
 ;;; Plays a sound for when the ball bounces.
