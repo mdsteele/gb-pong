@@ -8,6 +8,8 @@ INCLUDE "src/hardware.inc"
 P1F_DOWN   EQU P1F_3
 P1F_UP     EQU P1F_2
 
+;;;=========================================================================;;;
+
 ;;; Initial ball velocity:
 INIT_BALL_X_VEL EQU 2
 INIT_BALL_Y_VEL EQU 3
@@ -18,10 +20,57 @@ PADDLE2_SPEED EQU 1
 PADDLE_Y_MIN EQU 32
 PADDLE_Y_MAX EQU 152
 
+;;;=========================================================================;;;
+
 SECTION "Main", ROM0[$0150]
 Main::
-    ;; Store the stack at the back of RAM bank 0.
-    ld sp, _RAMBANK
+    ;; Initialize the stack.
+    ld sp, InitStackPointer
+
+    ;; Set up the OAM DMA routine.
+    ld hl, PerformOamDma               ; dest
+    ld de, OamDmaCode                  ; src
+    ld bc, OamDmaCodeEnd - OamDmaCode  ; count
+    call MemCopy
+
+    ;; Clear the shadow OAM.
+    ld hl, ShadowOam                 ; dest
+    ld bc, ShadowOamEnd - ShadowOam  ; count
+    call MemZero
+
+    ;; Add ball obj:
+    ld a, 20
+    ld [BallXPos], a
+    ld a, 80
+    ld [BallYPos], a
+    xor a
+    ld [BallObj], a
+
+    ;; Add paddle objs:
+    ld a, 12
+    ld [P1TopXPos], a
+    ld [P1BotXPos], a
+    ld a, 156
+    ld [P2TopXPos], a
+    ld [P2BotXPos], a
+    ld a, 88
+    ld [P1TopYPos], a
+    ld [P2TopYPos], a
+    ld a, 96
+    ld [P1BotYPos], a
+    ld [P2BotYPos], a
+    ld a, 1
+    ld [P1TopObj], a
+    ld [P2TopObj], a
+    ld a, 2
+    ld [P1BotObj], a
+    ld [P2BotObj], a
+
+    ;; Initialize game state:
+    ld a, INIT_BALL_X_VEL
+    ld [BallXVel], a
+    ld a, INIT_BALL_Y_VEL
+    ld [BallYVel], a
 
     ;; Turn off the LCD.
     .waitForVBlank
@@ -49,34 +98,6 @@ Main::
     ld bc, RomObjTiles.end - RomObjTiles  ; count
     call MemCopy
 
-    ;; Add ball obj to OAM:
-    ld a, 20
-    ld [BallXPos], a
-    ld a, 80
-    ld [BallYPos], a
-    xor a
-    ld [BallObj], a
-
-    ;; Add paddle objs to OAM:
-    ld a, 12
-    ld [P1TopXPos], a
-    ld [P1BotXPos], a
-    ld a, 156
-    ld [P2TopXPos], a
-    ld [P2BotXPos], a
-    ld a, 88
-    ld [P1TopYPos], a
-    ld [P2TopYPos], a
-    ld a, 96
-    ld [P1BotYPos], a
-    ld [P2BotYPos], a
-    ld a, 1
-    ld [P1TopObj], a
-    ld [P2TopObj], a
-    ld a, 2
-    ld [P1BotObj], a
-    ld [P2BotObj], a
-
     ;; Initialize background palette.
     ld a, %11100100
     ldh [rBGP], a
@@ -94,12 +115,6 @@ Main::
     ld a, $77
     ldh [rAUDVOL], a
 
-    ;; Init game state:
-    ld a, INIT_BALL_X_VEL
-    ld [BallXVel], a
-    ld a, INIT_BALL_Y_VEL
-    ld [BallYVel], a
-
     ;; Turn on the LCD.
     ld a, LCDCF_ON | LCDCF_BGON | LCDCF_OBJON | LCDCF_WIN9C00
     ldh [rLCDC], a
@@ -109,13 +124,8 @@ Main::
     ldh [rIE], a
     ei
 
-Run:
-    ;; Loop forever.
-    halt
-    nop
-    jr Run
-
-OnVBlankInterrupt::
+RunLoop:
+    call AwaitRedraw
 UpdateP1YPos:
     ;; Store D-pad state in `d`.
     ld a, P1F_GET_DPAD
@@ -260,7 +270,9 @@ UpdateBallXPos:
     .xElse
     ld [hl], a
     .xEnd
-    reti
+    jp RunLoop
+
+;;;=========================================================================;;;
 
 ;;; Copies bytes.
 ;;; @param hl Destination start address.
@@ -277,6 +289,35 @@ MemCopy:
     dec bc
     jr .loop
 
+;;; Zeroes bytes.
+;;; @param hl Destination start address.
+;;; @param bc Num bytes to zero.
+MemZero:
+    .loop
+    ld a, b
+    or c
+    ret z
+    xor a
+    ld [hl+], a
+    dec bc
+    jr .loop
+
+;;; Blocks until the next VBlank, then performs an OAM DMA.
+AwaitRedraw:
+    di    ; "Lock"
+    xor a
+    ldh [VBlankFlag], a
+    .loop
+    ei    ; "Await condition variable" (which is "notified" when an interrupt
+    halt  ; occurs).  Note that the effect of an ei is delayed by one
+    di    ; instruction, so no interrupt can occur here between ei and halt.
+    ldh a, [VBlankFlag]
+    or a
+    jr z, .loop
+    call PerformOamDma
+    ei    ; "Unlock"
+    ret
+
 ;;; Plays a sound for when the ball bounces.
 PlayBounceSound:
     ld a, %00101101
@@ -290,3 +331,5 @@ PlayBounceSound:
     ld a, %10000111
     ldh [rAUD1HIGH], a
     ret
+
+;;;=========================================================================;;;

@@ -45,10 +45,10 @@ $(OBJDIR)/interrupt.o: $(SRCDIR)/interrupt.asm $(SRCDIR)/hardware.inc
 $(OBJDIR)/main.o: $(SRCDIR)/main.asm $(SRCDIR)/hardware.inc
 	$(compile-asm)
 
-$(OBJDIR)/objdata.o: $(SRCDIR)/objdata.asm
+$(OBJDIR)/memory.o: $(SRCDIR)/memory.asm
 	$(compile-asm)
 
-$(OBJDIR)/state.o: $(SRCDIR)/state.asm
+$(OBJDIR)/objdata.o: $(SRCDIR)/objdata.asm
 	$(compile-asm)
 
 #=============================================================================#
