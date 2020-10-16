@@ -1,10 +1,17 @@
 INCLUDE "src/hardware.inc"
+INCLUDE "src/macros.inc"
 
 ;;;=========================================================================;;;
 
 ;;; Initial ball velocity:
 INIT_BALL_X_VEL EQU 2
 INIT_BALL_Y_VEL EQU 0
+;;; Min/max X position for ball.
+BALL_X_MIN EQU 8
+BALL_X_MAX EQU 160
+;;; Min/max Y position for ball.
+BALL_Y_MIN EQU 24
+BALL_Y_MAX EQU 152
 ;;; How many pixels each paddle can move per frame:
 PADDLE1_SPEED EQU 3
 PADDLE2_SPEED EQU 1
@@ -92,8 +99,7 @@ Main::
     ;; Turn off the LCD.
     .waitForVBlank
     ldh a, [rLY]
-    cp SCRN_Y
-    jr nz, .waitForVBlank
+    if_ne SCRN_Y, jr, .waitForVBlank
     ld a, LCDCF_OFF
     ld [rLCDC], a
 
@@ -182,8 +188,7 @@ UpdateP1YPos:
     jr z, .dpadElif
     ld a, [P1BotYPos]
     sub PADDLE1_SPEED
-    cp PADDLE_Y_MIN
-    jr nc, .upEnd
+    if_ge PADDLE_Y_MIN, jr, .upEnd
     ld a, PADDLE_Y_MIN
     .upEnd
     ld [P1BotYPos], a
@@ -197,8 +202,7 @@ UpdateP1YPos:
     jr z, .dpadEnd
     ld a, [P1BotYPos]
     add PADDLE1_SPEED
-    cp PADDLE_Y_MAX
-    jr c, .downEnd
+    if_le PADDLE_Y_MAX, jr, .downEnd
     ld a, PADDLE_Y_MAX
     .downEnd
     ld [P1BotYPos], a
@@ -213,29 +217,25 @@ UpdateP2YPos:
     ;; Store current P2 paddle center Y in `d`.
     ld a, [P2BotYPos]
     ld d, a
-    ;; If ball is above, move P2 paddle up.
+    ;; If ball Y is less than paddle Y, move P2 paddle up.
     ld a, b
-    cp d
-    jr nc, .aiElif
+    if_ge d, jr, .aiElif
     ld a, [P2BotYPos]
     sub PADDLE2_SPEED
-    cp PADDLE_Y_MIN
-    jr nc, .upEnd
+    if_ge PADDLE_Y_MIN, jr, .upEnd
     ld a, PADDLE_Y_MIN
     .upEnd
     ld [P2BotYPos], a
     sub 8
     ld [P2TopYPos], a
     jr .aiEnd
-    ;; Else if ball is below, move P2 paddle down.
+    ;; Else if ball Y is greater than paddle Y, move P2 paddle down.
     .aiElif
     ld a, d
-    cp b
-    jr nc, .aiEnd
+    if_ge b, jr, .aiEnd
     ld a, [P2BotYPos]
     add PADDLE2_SPEED
-    cp PADDLE_Y_MAX
-    jr c, .downEnd
+    if_le PADDLE_Y_MAX, jr, .downEnd
     ld a, PADDLE_Y_MAX
     .downEnd
     ld [P2BotYPos], a
@@ -243,29 +243,27 @@ UpdateP2YPos:
     ld [P2TopYPos], a
     .aiEnd
 UpdateBallYPos:
-    ;; b : old Y velocity
-    ;; c : new Y position, ignoring collisions
+    ;; b : old ball Y velocity
+    ;; c : new ball Y position, ignoring collisions
     ld a, [BallYVel]
     ld b, a
     ld a, [BallYPos]
     add b
     ld c, a
-    ;; if (newY < 24)
-    cp 24
-    jr nc, .yElif
-    ld a, 24
+    ;; Check if the ball hit the top edge.
+    if_ge BALL_Y_MIN, jr, .yElif
+    ld a, BALL_Y_MIN
     ld [BallYPos], a
     xor a
     sub b
     ld [BallYVel], a
     call PlayWallBounceSound
     jr .yEnd
-    ;; elif (newY > 152)
+    ;; Check if the ball hit the bottom edge.
     .yElif
     ld a, c
-    cp 152
-    jr c, .yElse
-    ld a, 152
+    if_le BALL_Y_MAX, jr, .yElse
+    ld a, BALL_Y_MAX
     ld [BallYPos], a
     xor a
     sub b
@@ -277,7 +275,7 @@ UpdateBallYPos:
     ld [BallYPos], a
     .yEnd
 UpdateBallXPos:
-    ;; c : new X position, ignoring collisions
+    ;; c : new ball X position, ignoring collisions
     ld a, [BallXVel]
     ld b, a
     ld a, [BallXPos]
@@ -285,21 +283,18 @@ UpdateBallXPos:
     ld c, a
     ;; Check which direction the ball is moving.
     ld a, [BallXVel]
-    and %10000000
-    jr z, .movingRight
+    if_nonneg jr, .movingRight
     ;; When moving left, we can hit the P1 paddle.
     .movingLeft
     ld a, c
-    cp PADDLE1_MIDX
-    jr nc, .movingEnd
+    if_gt PADDLE1_MIDX, jr, .movingEnd
     ld a, [P1TopYPos]
     sub 7
     ld e, a
     ld a, [BallYPos]
     sub e
     jr c, .movingEnd
-    cp 30
-    jr nc, .movingEnd
+    if_ge 30, jr, .movingEnd
     srl a
     srl a
     sub 3
@@ -311,16 +306,14 @@ UpdateBallXPos:
     ;; When moving right, we can hit the P2 paddle.
     .movingRight
     ld a, c
-    cp PADDLE2_MIDX - 8
-    jr c, .movingEnd
+    if_lt PADDLE2_MIDX - 8, jr, .movingEnd
     ld a, [P2TopYPos]
     sub 7
     ld e, a
     ld a, [BallYPos]
     sub e
     jr c, .movingEnd
-    cp 30
-    jr nc, .movingEnd
+    if_ge 30, jr, .movingEnd
     srl a
     srl a
     sub 3
@@ -329,11 +322,10 @@ UpdateBallXPos:
     ld [BallXVel], a
     call PlayPaddleBounceSound
     .movingEnd
-    ;; if (newX < 8)
+    ;; Check if the ball hit the left edge.
     ld a, c
-    cp 8
-    jr nc, .xElif
-    ld a, 8
+    if_ge BALL_X_MIN, jr, .xElif
+    ld a, BALL_X_MIN
     ld [BallXPos], a
     ld a, INIT_BALL_X_VEL
     ld [BallXVel], a
@@ -351,12 +343,11 @@ UpdateBallXPos:
     ld [P2ScoreTenObj], a
     call PlayScorePointSound
     jr .xEnd
-    ;; elif (newX > 160)
+    ;; Check if the ball hit the right edge.
     .xElif
     ld a, c
-    cp 160
-    jr c, .xElse
-    ld a, 160
+    if_le BALL_X_MAX, jr, .xElse
+    ld a, BALL_X_MAX
     ld [BallXPos], a
     ld a, -INIT_BALL_X_VEL
     ld [BallXVel], a
