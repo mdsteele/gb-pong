@@ -7,6 +7,10 @@ BallXVel::
     DB
 BallYVel::
     DB
+P1Score::
+    DB
+P2Score::
+    DB
 IsPaused::
     DB
 HoldingStartButton::
@@ -57,6 +61,38 @@ P2BotYPos::
 P2BotXPos::
     DB
 P2BotObj::
+    DB
+    DB
+
+P1ScoreTenYPos::
+    DB
+P1ScoreTenXPos::
+    DB
+P1ScoreTenObj::
+    DB
+    DB
+
+P1ScoreOneYPos::
+    DB
+P1ScoreOneXPos::
+    DB
+P1ScoreOneObj::
+    DB
+    DB
+
+P2ScoreTenYPos::
+    DB
+P2ScoreTenXPos::
+    DB
+P2ScoreTenObj::
+    DB
+    DB
+
+P2ScoreOneYPos::
+    DB
+P2ScoreOneXPos::
+    DB
+P2ScoreOneObj::
     DB
     DB
 

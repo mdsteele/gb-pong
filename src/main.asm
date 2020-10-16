@@ -1,6 +1,3 @@
-;;; TODO:
-;;; - Scoring
-
 INCLUDE "src/hardware.inc"
 
 ;;;=========================================================================;;;
@@ -43,7 +40,7 @@ Main::
     ld [BallXPos], a
     ld a, 80
     ld [BallYPos], a
-    xor a
+    ld a, 10
     ld [BallObj], a
 
     ;; Add paddle objs:
@@ -59,12 +56,27 @@ Main::
     ld a, PADDLE_Y_INIT
     ld [P1BotYPos], a
     ld [P2BotYPos], a
-    ld a, 1
+    ld a, 11
     ld [P1TopObj], a
     ld [P2TopObj], a
-    ld a, 2
+    ld a, 12
     ld [P1BotObj], a
     ld [P2BotObj], a
+
+    ;; Add score objs:
+    ld a, 16
+    ld [P1ScoreTenYPos], a
+    ld [P1ScoreOneYPos], a
+    ld [P2ScoreTenYPos], a
+    ld [P2ScoreOneYPos], a
+    ld a, 40
+    ld [P1ScoreTenXPos], a
+    add 8
+    ld [P1ScoreOneXPos], a
+    ld a, 120
+    ld [P2ScoreTenXPos], a
+    add 8
+    ld [P2ScoreOneXPos], a
 
     ;; Initialize game state:
     ld a, INIT_BALL_X_VEL
@@ -72,6 +84,8 @@ Main::
     ld a, INIT_BALL_Y_VEL
     ld [BallYVel], a
     xor a
+    ld [P1Score], a
+    ld [P2Score], a
     ld [IsPaused], a
     ld [HoldingStartButton], a
 
@@ -263,7 +277,6 @@ UpdateBallYPos:
     ld [BallYPos], a
     .yEnd
 UpdateBallXPos:
-    ;; b : old X velocity
     ;; c : new X position, ignoring collisions
     ld a, [BallXVel]
     ld b, a
@@ -271,7 +284,7 @@ UpdateBallXPos:
     add b
     ld c, a
     ;; Check which direction the ball is moving.
-    ld a, b
+    ld a, [BallXVel]
     and %10000000
     jr z, .movingRight
     ;; When moving left, we can hit the P1 paddle.
@@ -322,10 +335,21 @@ UpdateBallXPos:
     jr nc, .xElif
     ld a, 8
     ld [BallXPos], a
-    xor a
-    sub b
+    ld a, INIT_BALL_X_VEL
     ld [BallXVel], a
-    call PlayWallBounceSound
+    xor a
+    ld [BallYVel], a
+    ld a, [P2Score]
+    add 1
+    daa
+    ld [P2Score], a
+    and $0f
+    ld [P2ScoreOneObj], a
+    ld a, [P2Score]
+    swap a
+    and $0f
+    ld [P2ScoreTenObj], a
+    call PlayScorePointSound
     jr .xEnd
     ;; elif (newX > 160)
     .xElif
@@ -334,10 +358,21 @@ UpdateBallXPos:
     jr c, .xElse
     ld a, 160
     ld [BallXPos], a
-    xor a
-    sub b
+    ld a, -INIT_BALL_X_VEL
     ld [BallXVel], a
-    call PlayWallBounceSound
+    xor a
+    ld [BallYVel], a
+    ld a, [P1Score]
+    add 1
+    daa
+    ld [P1Score], a
+    and $0f
+    ld [P1ScoreOneObj], a
+    ld a, [P1Score]
+    swap a
+    and $0f
+    ld [P1ScoreTenObj], a
+    call PlayScorePointSound
     jr .xEnd
     ;; else
     .xElse
@@ -441,6 +476,20 @@ PlayWallBounceSound:
     ld a, %11100000
     ldh [rAUD1LOW], a
     ld a, %10000111
+    ldh [rAUD1HIGH], a
+    ret
+
+;;; Plays a sound for when a point is scored.
+PlayScorePointSound:
+    ld a, %11000101
+    ldh [rAUD1SWEEP], a
+    ld a, %10010000
+    ldh [rAUD1LEN], a
+    ld a, %10000101
+    ldh [rAUD1ENV], a
+    ld a, %11100000
+    ldh [rAUD1LOW], a
+    ld a, %10000101
     ldh [rAUD1HIGH], a
     ret
 
